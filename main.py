@@ -40,6 +40,17 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
+def render_template(template_name: str, request: Request, context: dict = None):
+    """Renderiza plantillas Jinja2 compatible con todas las versiones de Starlette / FastAPI."""
+    ctx = context.copy() if context else {}
+    ctx["request"] = request
+    try:
+        # Compatible con Starlette 0.36+ / FastAPI moderna
+        return templates.TemplateResponse(request=request, name=template_name, context=ctx)
+    except TypeError:
+        # Compatible con Starlette antigua
+        return templates.TemplateResponse(template_name, ctx)
+
 # Configurable Security API Key
 API_KEY = os.getenv("API_KEY", "screentime_secure_key_2026")
 APK_PATH = os.path.join("static", "app.apk")
@@ -69,7 +80,7 @@ def format_duration(seconds: float) -> str:
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Página de inicio con QR para descargar la APK."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return render_template("index.html", request)
 
 @app.get("/descargar")
 async def download_apk():
@@ -189,10 +200,10 @@ async def dashboard_view(request: Request, db: Session = Depends(get_db)):
     recent_logs = db.query(models.ScreenLog).order_by(models.ScreenLog.id.desc()).limit(20).all()
     total_sessions = db.query(func.count(models.ScreenLog.id)).scalar()
 
-    return templates.TemplateResponse(
+    return render_template(
         "dashboard.html",
+        request,
         {
-            "request": request,
             "devices": device_summaries,
             "recent_logs": recent_logs,
             "total_sessions": total_sessions,
