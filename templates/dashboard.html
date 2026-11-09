@@ -3,10 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Monitoreo - ScreenTime</title>
+    <title>Panel de Monitoreo en Tiempo Real - ScreenTime</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <meta http-equiv="refresh" content="30">
+    <style>
+        @keyframes pulse-green {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.15); }
+        }
+        .live-dot {
+            animation: pulse-green 1.8s infinite ease-in-out;
+        }
+        .new-row {
+            animation: highlight 2s ease-out;
+        }
+        @keyframes highlight {
+            0% { background-color: rgba(99, 102, 241, 0.4); }
+            100% { background-color: transparent; }
+        }
+    </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
     <div class="max-w-6xl mx-auto space-y-6">
@@ -14,23 +29,37 @@
         <!-- Header -->
         <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
             <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">
+                <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-600/30">
                     <i class="fa-solid fa-chart-pie"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">Panel de Monitoreo de Celulares</h1>
-                    <p class="text-slate-400 text-xs">Monitoreo en tiempo real de tiempo de pantalla (actualiza cada 30s)</p>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-xl font-bold text-white">Panel de Monitoreo de Celulares</h1>
+                        <span id="liveBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 live-dot"></span>
+                            EN VIVO
+                        </span>
+                    </div>
+                    <p class="text-slate-400 text-xs">Actualización instantánea en tiempo real sin recargar la página</p>
                 </div>
             </div>
             <div class="flex items-center gap-3">
                 <a href="/" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition flex items-center gap-2 border border-slate-700">
                     <i class="fa-solid fa-qrcode"></i> Ver QR / Instalar
                 </a>
-                <button onclick="location.reload()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-2">
-                    <i class="fa-solid fa-rotate-right"></i> Refrescar
+                <button onclick="fetchLatestData()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> Sincronizar
                 </button>
             </div>
         </header>
+
+        <!-- Toast de Notificación en Vivo -->
+        <div id="liveToast" class="hidden transform transition-all duration-300 bg-indigo-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-medium">
+                <i class="fa-solid fa-bell text-sm"></i>
+                <span id="toastMessage">Nueva sesión de pantalla registrada</span>
+            </div>
+        </div>
 
         <!-- KPI Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -39,8 +68,8 @@
                     <span>Dispositivos Activos</span>
                     <i class="fa-solid fa-mobile-screen-button text-indigo-400 text-base"></i>
                 </div>
-                <div class="text-3xl font-bold text-white mt-3">{{ devices|length }}</div>
-                <div class="text-xs text-slate-500 mt-1">Celulares registrados</div>
+                <div id="kpiDevices" class="text-3xl font-bold text-white mt-3">{{ devices|length }}</div>
+                <div class="text-xs text-slate-500 mt-1">Celulares monitoreados</div>
             </div>
 
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow">
@@ -48,8 +77,8 @@
                     <span>Sesiones Registradas</span>
                     <i class="fa-solid fa-clock-rotate-left text-emerald-400 text-base"></i>
                 </div>
-                <div class="text-3xl font-bold text-white mt-3">{{ total_sessions }}</div>
-                <div class="text-xs text-slate-500 mt-1">Veces que se encendió y apagó</div>
+                <div id="kpiSessions" class="text-3xl font-bold text-white mt-3">{{ total_sessions }}</div>
+                <div class="text-xs text-slate-500 mt-1">Veces que se usó el teléfono</div>
             </div>
 
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow">
@@ -57,18 +86,20 @@
                     <span>Tiempo Total Acumulado</span>
                     <i class="fa-solid fa-stopwatch text-amber-400 text-base"></i>
                 </div>
-                <div class="text-3xl font-bold text-white mt-3">{{ grand_total_time }}</div>
+                <div id="kpiTotalTime" class="text-3xl font-bold text-emerald-400 mt-3">{{ grand_total_time }}</div>
                 <div class="text-xs text-slate-500 mt-1">Tiempo de pantalla acumulado</div>
             </div>
         </div>
 
         <!-- Devices Table -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                <i class="fa-solid fa-list-check text-indigo-400"></i> Dispositivos y Tiempo en Pantalla
-            </h2>
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-indigo-400"></i> Dispositivos Monitoreados
+                </h2>
+                <span id="lastUpdated" class="text-[11px] text-slate-500 font-mono">Actualizado hace un momento</span>
+            </div>
 
-            {% if devices %}
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
@@ -80,7 +111,7 @@
                             <th class="pb-3 px-3">Última Actividad</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800/60">
+                    <tbody id="devicesTableBody" class="divide-y divide-slate-800/60">
                         {% for d in devices %}
                         <tr class="hover:bg-slate-800/40 transition">
                             <td class="py-3 px-3 font-medium text-white flex items-center gap-2">
@@ -90,28 +121,20 @@
                             <td class="py-3 px-3 font-mono text-xs text-slate-400">{{ d.id }}</td>
                             <td class="py-3 px-3 font-semibold text-emerald-400">{{ d.total_screen_time_formatted }}</td>
                             <td class="py-3 px-3 text-slate-300">{{ d.total_unlocks }} veces</td>
-                            <td class="py-3 px-3 text-xs text-slate-400">{{ d.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td class="py-3 px-3 text-xs text-slate-400">{{ d.last_seen }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <div class="text-center py-12 text-slate-500">
-                <i class="fa-solid fa-mobile-screen text-4xl mb-3 text-slate-600 block"></i>
-                <p class="text-sm">Aún no se ha registrado ningún celular.</p>
-                <p class="text-xs text-slate-600 mt-1">Escanea el código QR desde el móvil e instala la app para comenzar.</p>
-            </div>
-            {% endif %}
         </div>
 
         <!-- Recent Logs Table -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
             <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Últimas 20 Sesiones Registradas
+                <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Últimas Sesiones Registradas (En Vivo)
             </h2>
 
-            {% if recent_logs %}
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
@@ -119,32 +142,125 @@
                             <th class="pb-3 px-3">Dispositivo</th>
                             <th class="pb-3 px-3">Pantalla Encendida</th>
                             <th class="pb-3 px-3">Pantalla Apagada</th>
-                            <th class="pb-3 px-3">Duración</th>
+                            <th class="pb-3 px-3">Duración de Uso</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800/60">
+                    <tbody id="recentLogsTableBody" class="divide-y divide-slate-800/60">
                         {% for log in recent_logs %}
                         <tr class="hover:bg-slate-800/40 transition">
                             <td class="py-3 px-3 font-mono text-xs text-indigo-300">{{ log.device_id }}</td>
-                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_on_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_off_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                            <td class="py-3 px-3 font-semibold text-amber-300">
-                                {% set m = (log.duration_seconds // 60) | int %}
-                                {% set s = (log.duration_seconds % 60) | int %}
-                                {{ m }}m {{ s }}s
-                            </td>
+                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_on_at }}</td>
+                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_off_at }}</td>
+                            <td class="py-3 px-3 font-semibold text-amber-300">{{ log.duration_formatted }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <div class="text-center py-8 text-slate-500 text-sm">
-                No hay sesiones recientes para mostrar.
-            </div>
-            {% endif %}
         </div>
 
     </div>
+
+    <!-- JavaScript para Tiempo Real con WebSocket + Polling Inteligente -->
+    <script>
+        function showToast(msg) {
+            const toast = document.getElementById('liveToast');
+            document.getElementById('toastMessage').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 4000);
+        }
+
+        async function fetchLatestData() {
+            try {
+                const response = await fetch('/api/v1/dashboard-data');
+                if (!response.ok) return;
+                const data = await response.json();
+                updateDashboardUI(data);
+            } catch (err) {
+                console.error('Error sincronizando datos:', err);
+            }
+        }
+
+        function updateDashboardUI(data) {
+            // Actualizar KPIs
+            document.getElementById('kpiDevices').innerText = data.devices.length;
+            document.getElementById('kpiSessions').innerText = data.total_sessions;
+            document.getElementById('kpiTotalTime').innerText = data.grand_total_time;
+            document.getElementById('lastUpdated').innerText = 'Última actualización: ' + new Date().toLocaleTimeString();
+
+            // Actualizar Tabla de Dispositivos
+            const devTbody = document.getElementById('devicesTableBody');
+            if (data.devices.length === 0) {
+                devTbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-500">Aún no hay celulares registrados</td></tr>';
+            } else {
+                devTbody.innerHTML = data.devices.map(d => `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-3 px-3 font-medium text-white flex items-center gap-2">
+                            <i class="fa-solid fa-mobile text-slate-400"></i>
+                            ${d.model_name}
+                        </td>
+                        <td class="py-3 px-3 font-mono text-xs text-slate-400">${d.id}</td>
+                        <td class="py-3 px-3 font-semibold text-emerald-400">${d.total_screen_time_formatted}</td>
+                        <td class="py-3 px-3 text-slate-300">${d.total_unlocks} veces</td>
+                        <td class="py-3 px-3 text-xs text-slate-400">${d.last_seen}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Actualizar Tabla de Sesiones Recientes
+            const logTbody = document.getElementById('recentLogsTableBody');
+            if (data.recent_logs.length === 0) {
+                logTbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-slate-500">No hay sesiones recientes para mostrar</td></tr>';
+            } else {
+                logTbody.innerHTML = data.recent_logs.map(log => `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-3 px-3 font-mono text-xs text-indigo-300">${log.device_id}</td>
+                        <td class="py-3 px-3 text-xs text-slate-300">${log.screen_on_at}</td>
+                        <td class="py-3 px-3 text-xs text-slate-300">${log.screen_off_at}</td>
+                        <td class="py-3 px-3 font-semibold text-amber-300">${log.duration_formatted}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // Conectar WebSocket para actualización ultra rápida
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('✅ WebSocket conectado en tiempo real');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'NEW_SESSION') {
+                        showToast(`📱 ${message.model_name || message.device_id}: pantalla usada durante ${message.duration_formatted}`);
+                        fetchLatestData();
+                    }
+                } catch (e) {
+                    console.error('Error procesando mensaje WebSocket:', e);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket cerrado. Reconectando en 3s...');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+        }
+
+        connectWebSocket();
+
+        // Polling en segundo plano cada 3 segundos (nunca recarga la pantalla entera)
+        setInterval(fetchLatestData, 3000);
+    </script>
 </body>
 </html>

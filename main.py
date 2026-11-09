@@ -1,10 +1,10 @@
 import os
 import io
 from datetime import datetime
-from typing import List
+from typing import List, Dict, Any
 
-from fastapi import FastAPI, Depends, HTTPException, Header, Request, status
-from fastapi.responses import HTMLResponse, Response, FileResponse
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, status, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, Response, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +24,28 @@ app = FastAPI(
     description="Servidor de monitoreo de tiempo en pantalla de dispositivos móviles",
     version="1.0.0"
 )
+
+# Gestor de conexiones WebSocket para actualización en tiempo real
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, data: dict):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_json(data)
+            except Exception:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
 
 # CORS
 app.add_middleware(
@@ -165,11 +187,81 @@ async def register_screen_event(
     db.commit()
     db.refresh(log)
 
+    # Notificar a los navegadores conectados en tiempo real
+    await manager.broadcast({
+        "type": "NEW_SESSION",
+        "device_id": log.device_id,
+        "model_name": device.model_name,
+        "screen_on_at": log.screen_on_at.strftime("%Y-%m-%d %H:%M:%S"),
+        "screen_off_at": log.screen_off_at.strftime("%Y-%m-%d %H:%M:%S"),
+        "duration_seconds": log.duration_seconds,
+        "duration_formatted": format_duration(log.duration_seconds)
+    })
+
     return {
         "status": "success",
         "message": "Evento registrado correctamente",
         "log_id": log.id,
         "duration_seconds": log.duration_seconds
+    }
+
+@app.websocket("/ws/dashboard")
+async def websocket_dashboard_endpoint(websocket: WebSocket):
+    """Canal WebSocket para recibir actualizaciones instantáneas en el dashboard."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Mantener conexión viva
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
+
+@app.get("/api/v1/dashboard-data")
+async def get_dashboard_data(db: Session = Depends(get_db)):
+    """Devuelve los datos del dashboard en JSON para actualización fluida."""
+    devices = db.query(models.Device).order_by(models.Device.last_seen.desc()).all()
+    
+    device_summaries = []
+    grand_total_seconds = 0.0
+
+    for d in devices:
+        total_time = db.query(func.coalesce(func.sum(models.ScreenLog.duration_seconds), 0.0))\
+                       .filter(models.ScreenLog.device_id == d.id).scalar()
+        total_unlocks = db.query(func.count(models.ScreenLog.id))\
+                          .filter(models.ScreenLog.device_id == d.id).scalar()
+        
+        grand_total_seconds += float(total_time)
+        
+        device_summaries.append({
+            "id": d.id,
+            "model_name": d.model_name,
+            "total_screen_time_seconds": total_time,
+            "total_screen_time_formatted": format_duration(total_time),
+            "total_unlocks": total_unlocks,
+            "last_seen": d.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    recent_logs_query = db.query(models.ScreenLog).order_by(models.ScreenLog.id.desc()).limit(20).all()
+    recent_logs = [
+        {
+            "id": l.id,
+            "device_id": l.device_id,
+            "screen_on_at": l.screen_on_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "screen_off_at": l.screen_off_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "duration_seconds": l.duration_seconds,
+            "duration_formatted": format_duration(l.duration_seconds)
+        }
+        for l in recent_logs_query
+    ]
+    total_sessions = db.query(func.count(models.ScreenLog.id)).scalar()
+
+    return {
+        "devices": device_summaries,
+        "recent_logs": recent_logs,
+        "total_sessions": total_sessions,
+        "grand_total_time": format_duration(grand_total_seconds)
     }
 
 @app.get("/dashboard", response_class=HTMLResponse)
