@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instalar Monitor de Tiempo en Pantalla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="max-w-md w-full bg-slate-800/90 backdrop-blur border border-slate-700 rounded-3xl p-8 shadow-2xl text-center">
+        <div class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30">
+            <i class="fa-solid fa-mobile-screen text-2xl text-white"></i>
+        </div>
+        
+        <h1 class="text-2xl font-bold text-white mb-2">ScreenTime Tracker</h1>
+        <p class="text-slate-400 text-sm mb-6">Escanea el código QR desde tu celular Android para descargar e instalar la aplicación directamente.</p>
+
+        <!-- QR Code Container -->
+        <div class="bg-white p-4 rounded-2xl inline-block shadow-inner mb-6">
+            <img src="/qr" alt="Código QR para descargar APK" class="w-56 h-56 mx-auto rounded-lg">
+        </div>
+
+        <div class="space-y-3">
+            <a href="/descargar" class="flex items-center justify-center gap-2 w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition transform active:scale-95">
+                <i class="fa-solid fa-download"></i>
+                Descargar APK Directamente
+            </a>
+            <a href="/dashboard" class="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-slate-700/60 hover:bg-slate-700 text-slate-300 font-medium text-sm rounded-xl transition">
+                <i class="fa-solid fa-chart-line"></i>
+                Ver Panel de Monitoreo
+            </a>
+        </div>
+
+        <!-- Instructions -->
+        <div class="mt-8 pt-6 border-t border-slate-700 text-left text-xs text-slate-400 space-y-2">
+            <p class="font-semibold text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-info text-indigo-400"></i> Pasos para instalar:
+            </p>
+            <ol class="list-decimal list-inside space-y-1 text-slate-400">
+                <li>Apunta la cámara de tu celular al código QR.</li>
+                <li>Toca el enlace que aparece y confirma la descarga.</li>
+                <li>Abre el archivo descargado y presiona <b>Instalar</b> (habilita orígenes desconocidos si el sistema lo solicita).</li>
+                <li>Abre la app y concede el permiso para ejecutarse en segundo plano.</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

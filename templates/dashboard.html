@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Monitoreo - ScreenTime</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta http-equiv="refresh" content="30">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white">Panel de Monitoreo de Celulares</h1>
+                    <p class="text-slate-400 text-xs">Monitoreo en tiempo real de tiempo de pantalla (actualiza cada 30s)</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition flex items-center gap-2 border border-slate-700">
+                    <i class="fa-solid fa-qrcode"></i> Ver QR / Instalar
+                </a>
+                <button onclick="location.reload()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> Refrescar
+                </button>
+            </div>
+        </header>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow">
+                <div class="flex items-center justify-between text-slate-400 text-xs uppercase font-semibold">
+                    <span>Dispositivos Activos</span>
+                    <i class="fa-solid fa-mobile-screen-button text-indigo-400 text-base"></i>
+                </div>
+                <div class="text-3xl font-bold text-white mt-3">{{ devices|length }}</div>
+                <div class="text-xs text-slate-500 mt-1">Celulares registrados</div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow">
+                <div class="flex items-center justify-between text-slate-400 text-xs uppercase font-semibold">
+                    <span>Sesiones Registradas</span>
+                    <i class="fa-solid fa-clock-rotate-left text-emerald-400 text-base"></i>
+                </div>
+                <div class="text-3xl font-bold text-white mt-3">{{ total_sessions }}</div>
+                <div class="text-xs text-slate-500 mt-1">Veces que se encendió y apagó</div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow">
+                <div class="flex items-center justify-between text-slate-400 text-xs uppercase font-semibold">
+                    <span>Tiempo Total Acumulado</span>
+                    <i class="fa-solid fa-stopwatch text-amber-400 text-base"></i>
+                </div>
+                <div class="text-3xl font-bold text-white mt-3">{{ grand_total_time }}</div>
+                <div class="text-xs text-slate-500 mt-1">Tiempo de pantalla acumulado</div>
+            </div>
+        </div>
+
+        <!-- Devices Table -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-indigo-400"></i> Dispositivos y Tiempo en Pantalla
+            </h2>
+
+            {% if devices %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase">
+                            <th class="pb-3 px-3">Dispositivo / Modelo</th>
+                            <th class="pb-3 px-3">ID Dispositivo</th>
+                            <th class="pb-3 px-3">Tiempo Total en Pantalla</th>
+                            <th class="pb-3 px-3">Desbloqueos</th>
+                            <th class="pb-3 px-3">Última Actividad</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for d in devices %}
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="py-3 px-3 font-medium text-white flex items-center gap-2">
+                                <i class="fa-solid fa-mobile text-slate-400"></i>
+                                {{ d.model_name }}
+                            </td>
+                            <td class="py-3 px-3 font-mono text-xs text-slate-400">{{ d.id }}</td>
+                            <td class="py-3 px-3 font-semibold text-emerald-400">{{ d.total_screen_time_formatted }}</td>
+                            <td class="py-3 px-3 text-slate-300">{{ d.total_unlocks }} veces</td>
+                            <td class="py-3 px-3 text-xs text-slate-400">{{ d.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-12 text-slate-500">
+                <i class="fa-solid fa-mobile-screen text-4xl mb-3 text-slate-600 block"></i>
+                <p class="text-sm">Aún no se ha registrado ningún celular.</p>
+                <p class="text-xs text-slate-600 mt-1">Escanea el código QR desde el móvil e instala la app para comenzar.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Recent Logs Table -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Últimas 20 Sesiones Registradas
+            </h2>
+
+            {% if recent_logs %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase">
+                            <th class="pb-3 px-3">Dispositivo</th>
+                            <th class="pb-3 px-3">Pantalla Encendida</th>
+                            <th class="pb-3 px-3">Pantalla Apagada</th>
+                            <th class="pb-3 px-3">Duración</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for log in recent_logs %}
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="py-3 px-3 font-mono text-xs text-indigo-300">{{ log.device_id }}</td>
+                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_on_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_off_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td class="py-3 px-3 font-semibold text-amber-300">
+                                {% set m = (log.duration_seconds // 60) | int %}
+                                {% set s = (log.duration_seconds % 60) | int %}
+                                {{ m }}m {{ s }}s
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-slate-500 text-sm">
+                No hay sesiones recientes para mostrar.
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</body>
+</html>
