@@ -305,12 +305,26 @@
                 try {
                     const message = JSON.parse(event.data);
                     if (message.type === 'SCREEN_STATE_CHANGE') {
+                        const dev = currentDevicesData.find(d => d.id === message.device_id);
+                        if (dev) {
+                            dev.is_screen_on = message.is_screen_on;
+                            dev.current_session_started_at = message.started_at;
+                            renderDevicesTable();
+                        }
                         if (message.is_screen_on) {
                             showToast("🟢 PANTALLA ENCENDIDA", `${message.model_name || message.device_id} encendió la pantalla. Iniciando contador...`, true);
+                        } else {
+                            showToast("📱 PANTALLA APAGADA", `${message.model_name || message.device_id}: pantalla apagada. Contador detenido.`, false);
                         }
                         fetchLatestData();
                     } else if (message.type === 'NEW_SESSION') {
-                        showToast("📱 PANTALLA APAGADA", `${message.model_name || message.device_id}: sesión finalizada (${message.duration_formatted})`, false);
+                        const dev = currentDevicesData.find(d => d.id === message.device_id);
+                        if (dev) {
+                            dev.is_screen_on = false;
+                            dev.current_session_started_at = null;
+                            renderDevicesTable();
+                        }
+                        showToast("📱 SESIÓN COMPLETADA", `${message.model_name || message.device_id}: uso de ${message.duration_formatted}`, false);
                         fetchLatestData();
                     }
                 } catch (e) {
