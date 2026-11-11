@@ -89,8 +89,8 @@ def render_template(template_name: str, request: Request, context: dict = None):
 # Configurable Security API Key & App Version
 API_KEY = os.getenv("API_KEY", "screentime_secure_key_2026")
 APK_PATH = os.path.join("static", "app.apk")
-LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "6"))
-LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.3.2")
+LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "7"))
+LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.3.3")
 
 @app.get("/api/v1/app-version")
 async def get_app_version(request: Request):
@@ -108,7 +108,7 @@ async def get_app_version(request: Request):
         "version_code": LATEST_VERSION_CODE,
         "version_name": LATEST_VERSION_NAME,
         "download_url": download_url,
-        "release_notes": "Eliminación de retrasos al apagar la pantalla: sincronización atómica inmediata, prevención de colisiones de latido y respuesta instantánea."
+        "release_notes": "Soporte ForegroundService dataSync: permite transmitir por internet en segundo plano cuando la app está minimizada en Infinix/Android 14."
     }
 
 def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
