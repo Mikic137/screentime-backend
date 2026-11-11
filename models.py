@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -8,6 +8,8 @@ class Device(Base):
 
     id = Column(String(100), primary_key=True, index=True) # Unique device UUID or Android ID
     model_name = Column(String(100), default="Android Device")
+    is_screen_on = Column(Boolean, default=False) # Si la pantalla está encendida en este instante
+    current_session_started_at = Column(DateTime, nullable=True) # Momento en que se encendió
     created_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.utcnow)
 

@@ -9,17 +9,13 @@
     <style>
         @keyframes pulse-green {
             0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(1.15); }
+            50% { opacity: 0.35; transform: scale(1.15); }
         }
         .live-dot {
-            animation: pulse-green 1.8s infinite ease-in-out;
+            animation: pulse-green 1.5s infinite ease-in-out;
         }
-        .new-row {
-            animation: highlight 2s ease-out;
-        }
-        @keyframes highlight {
-            0% { background-color: rgba(99, 102, 241, 0.4); }
-            100% { background-color: transparent; }
+        .active-glow {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
         }
     </style>
 </head>
@@ -40,7 +36,9 @@
                             EN VIVO
                         </span>
                     </div>
-                    <p class="text-slate-400 text-xs">Actualización instantánea en tiempo real sin recargar la página</p>
+                    <p class="text-slate-400 text-xs mt-0.5">
+                        Monitoreo en tiempo real | Horas convertidas automáticamente a tu <span class="text-indigo-400 font-semibold">hora local</span>
+                    </p>
                 </div>
             </div>
             <div class="flex items-center gap-3">
@@ -53,11 +51,14 @@
             </div>
         </header>
 
-        <!-- Toast de Notificación en Vivo -->
-        <div id="liveToast" class="hidden transform transition-all duration-300 bg-indigo-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center justify-between">
-            <div class="flex items-center gap-2 text-xs font-medium">
-                <i class="fa-solid fa-bell text-sm"></i>
-                <span id="toastMessage">Nueva sesión de pantalla registrada</span>
+        <!-- Floating Live Toast Notifications -->
+        <div id="liveToast" class="hidden transition-all duration-300 bg-indigo-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-indigo-400/30 flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm">
+                <i id="toastIcon" class="fa-solid fa-mobile-screen"></i>
+            </div>
+            <div>
+                <p id="toastTitle" class="text-xs font-bold uppercase tracking-wider text-indigo-200">Notificación en Vivo</p>
+                <p id="toastMessage" class="text-sm font-medium">Nueva sesión iniciada</p>
             </div>
         </div>
 
@@ -68,8 +69,8 @@
                     <span>Dispositivos Activos</span>
                     <i class="fa-solid fa-mobile-screen-button text-indigo-400 text-base"></i>
                 </div>
-                <div id="kpiDevices" class="text-3xl font-bold text-white mt-3">{{ devices|length }}</div>
-                <div class="text-xs text-slate-500 mt-1">Celulares monitoreados</div>
+                <div id="kpiDevices" class="text-3xl font-bold text-white mt-3">0</div>
+                <div class="text-xs text-slate-500 mt-1">Celulares registrados</div>
             </div>
 
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow">
@@ -77,7 +78,7 @@
                     <span>Sesiones Registradas</span>
                     <i class="fa-solid fa-clock-rotate-left text-emerald-400 text-base"></i>
                 </div>
-                <div id="kpiSessions" class="text-3xl font-bold text-white mt-3">{{ total_sessions }}</div>
+                <div id="kpiSessions" class="text-3xl font-bold text-white mt-3">0</div>
                 <div class="text-xs text-slate-500 mt-1">Veces que se usó el teléfono</div>
             </div>
 
@@ -86,53 +87,42 @@
                     <span>Tiempo Total Acumulado</span>
                     <i class="fa-solid fa-stopwatch text-amber-400 text-base"></i>
                 </div>
-                <div id="kpiTotalTime" class="text-3xl font-bold text-emerald-400 mt-3">{{ grand_total_time }}</div>
+                <div id="kpiTotalTime" class="text-3xl font-bold text-emerald-400 mt-3">0s</div>
                 <div class="text-xs text-slate-500 mt-1">Tiempo de pantalla acumulado</div>
             </div>
         </div>
 
-        <!-- Devices Table -->
+        <!-- Devices Table with LIVE Screen State & Counter -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-list-check text-indigo-400"></i> Dispositivos Monitoreados
+                    <i class="fa-solid fa-list-check text-indigo-400"></i> Dispositivos y Estado de Pantalla en Vivo
                 </h2>
-                <span id="lastUpdated" class="text-[11px] text-slate-500 font-mono">Actualizado hace un momento</span>
+                <span id="lastUpdated" class="text-[11px] text-slate-500 font-mono">Sincronizando...</span>
             </div>
 
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
                         <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase">
-                            <th class="pb-3 px-3">Dispositivo / Modelo</th>
-                            <th class="pb-3 px-3">ID Dispositivo</th>
-                            <th class="pb-3 px-3">Tiempo Total en Pantalla</th>
+                            <th class="pb-3 px-3">Dispositivo</th>
+                            <th class="pb-3 px-3">Estado Actual</th>
+                            <th class="pb-3 px-3">Tiempo Total Hoy</th>
                             <th class="pb-3 px-3">Desbloqueos</th>
-                            <th class="pb-3 px-3">Última Actividad</th>
+                            <th class="pb-3 px-3">Última Actividad (Hora Local)</th>
                         </tr>
                     </thead>
                     <tbody id="devicesTableBody" class="divide-y divide-slate-800/60">
-                        {% for d in devices %}
-                        <tr class="hover:bg-slate-800/40 transition">
-                            <td class="py-3 px-3 font-medium text-white flex items-center gap-2">
-                                <i class="fa-solid fa-mobile text-slate-400"></i>
-                                {{ d.model_name }}
-                            </td>
-                            <td class="py-3 px-3 font-mono text-xs text-slate-400">{{ d.id }}</td>
-                            <td class="py-3 px-3 font-semibold text-emerald-400">{{ d.total_screen_time_formatted }}</td>
-                            <td class="py-3 px-3 text-slate-300">{{ d.total_unlocks }} veces</td>
-                            <td class="py-3 px-3 text-xs text-slate-400">{{ d.last_seen }}</td>
-                        </tr>
-                        {% endfor %}
+                        <tr><td colspan="5" class="py-8 text-center text-slate-500">Cargando dispositivos...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Recent Logs Table -->
+        <!-- Recent Logs Table with Local Time -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
             <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Últimas Sesiones Registradas (En Vivo)
+                <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Historial de Sesiones (Hora Local)
             </h2>
 
             <div class="overflow-x-auto">
@@ -146,14 +136,7 @@
                         </tr>
                     </thead>
                     <tbody id="recentLogsTableBody" class="divide-y divide-slate-800/60">
-                        {% for log in recent_logs %}
-                        <tr class="hover:bg-slate-800/40 transition">
-                            <td class="py-3 px-3 font-mono text-xs text-indigo-300">{{ log.device_id }}</td>
-                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_on_at }}</td>
-                            <td class="py-3 px-3 text-xs text-slate-300">{{ log.screen_off_at }}</td>
-                            <td class="py-3 px-3 font-semibold text-amber-300">{{ log.duration_formatted }}</td>
-                        </tr>
-                        {% endfor %}
+                        <tr><td colspan="4" class="py-6 text-center text-slate-500">Cargando historial...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -161,15 +144,49 @@
 
     </div>
 
-    <!-- JavaScript para Tiempo Real con WebSocket + Polling Inteligente -->
+    <!-- JavaScript para Tiempo Real, Zonas Horarias y Contador de Segundos en Vivo -->
     <script>
-        function showToast(msg) {
+        let currentDevicesData = [];
+        let toastTimeout = null;
+
+        // Formatea fecha ISO UTC a la hora local exacta del usuario
+        function formatLocalDate(isoString) {
+            if (!isoString) return '-';
+            const date = new Date(isoString);
+            if (isNaN(date.getTime())) return isoString;
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        // Formatea segundos a formato Xh Ym Zs
+        function formatDurationSeconds(secs) {
+            const s = Math.max(0, Math.floor(secs));
+            const hours = Math.floor(s / 3600);
+            const minutes = Math.floor((s % 3600) / 60);
+            const remSeconds = s % 60;
+            if (hours > 0) return `${hours}h ${minutes}m ${remSeconds}s`;
+            if (minutes > 0) return `${minutes}m ${remSeconds}s`;
+            return `${remSeconds}s`;
+        }
+
+        function showToast(title, msg, isSuccess = true) {
             const toast = document.getElementById('liveToast');
+            const icon = document.getElementById('toastIcon');
+            document.getElementById('toastTitle').innerText = title;
             document.getElementById('toastMessage').innerText = msg;
+
+            if (isSuccess) {
+                toast.className = "fixed bottom-6 right-6 z-50 transition-all duration-300 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-400/30 flex items-center gap-3";
+                icon.className = "fa-solid fa-mobile-screen";
+            } else {
+                toast.className = "fixed bottom-6 right-6 z-50 transition-all duration-300 bg-indigo-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-indigo-400/30 flex items-center gap-3";
+                icon.className = "fa-solid fa-power-off";
+            }
+
             toast.classList.remove('hidden');
-            setTimeout(() => {
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
                 toast.classList.add('hidden');
-            }, 4000);
+            }, 4500);
         }
 
         async function fetchLatestData() {
@@ -177,6 +194,7 @@
                 const response = await fetch('/api/v1/dashboard-data');
                 if (!response.ok) return;
                 const data = await response.json();
+                currentDevicesData = data.devices || [];
                 updateDashboardUI(data);
             } catch (err) {
                 console.error('Error sincronizando datos:', err);
@@ -184,48 +202,96 @@
         }
 
         function updateDashboardUI(data) {
-            // Actualizar KPIs
             document.getElementById('kpiDevices').innerText = data.devices.length;
             document.getElementById('kpiSessions').innerText = data.total_sessions;
             document.getElementById('kpiTotalTime').innerText = data.grand_total_time;
-            document.getElementById('lastUpdated').innerText = 'Última actualización: ' + new Date().toLocaleTimeString();
+            document.getElementById('lastUpdated').innerText = 'Hora local del navegador: ' + new Date().toLocaleTimeString();
 
-            // Actualizar Tabla de Dispositivos
-            const devTbody = document.getElementById('devicesTableBody');
-            if (data.devices.length === 0) {
-                devTbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-500">Aún no hay celulares registrados</td></tr>';
-            } else {
-                devTbody.innerHTML = data.devices.map(d => `
-                    <tr class="hover:bg-slate-800/40 transition">
-                        <td class="py-3 px-3 font-medium text-white flex items-center gap-2">
-                            <i class="fa-solid fa-mobile text-slate-400"></i>
-                            ${d.model_name}
-                        </td>
-                        <td class="py-3 px-3 font-mono text-xs text-slate-400">${d.id}</td>
-                        <td class="py-3 px-3 font-semibold text-emerald-400">${d.total_screen_time_formatted}</td>
-                        <td class="py-3 px-3 text-slate-300">${d.total_unlocks} veces</td>
-                        <td class="py-3 px-3 text-xs text-slate-400">${d.last_seen}</td>
-                    </tr>
-                `).join('');
-            }
+            // Renderizar tabla de dispositivos
+            renderDevicesTable();
 
-            // Actualizar Tabla de Sesiones Recientes
+            // Renderizar tabla de historial con Hora Local
             const logTbody = document.getElementById('recentLogsTableBody');
-            if (data.recent_logs.length === 0) {
-                logTbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-slate-500">No hay sesiones recientes para mostrar</td></tr>';
+            if (!data.recent_logs || data.recent_logs.length === 0) {
+                logTbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-slate-500">No hay sesiones registradas aún</td></tr>';
             } else {
                 logTbody.innerHTML = data.recent_logs.map(log => `
                     <tr class="hover:bg-slate-800/40 transition">
                         <td class="py-3 px-3 font-mono text-xs text-indigo-300">${log.device_id}</td>
-                        <td class="py-3 px-3 text-xs text-slate-300">${log.screen_on_at}</td>
-                        <td class="py-3 px-3 text-xs text-slate-300">${log.screen_off_at}</td>
+                        <td class="py-3 px-3 text-xs text-slate-300">${formatLocalDate(log.screen_on_at)}</td>
+                        <td class="py-3 px-3 text-xs text-slate-300">${formatLocalDate(log.screen_off_at)}</td>
                         <td class="py-3 px-3 font-semibold text-amber-300">${log.duration_formatted}</td>
                     </tr>
                 `).join('');
             }
         }
 
-        // Conectar WebSocket para actualización ultra rápida
+        // Renderizado reactivo de la tabla de dispositivos con el contador en vivo
+        function renderDevicesTable() {
+            const devTbody = document.getElementById('devicesTableBody');
+            if (!currentDevicesData || currentDevicesData.length === 0) {
+                devTbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-500">Aún no hay celulares registrados</td></tr>';
+                return;
+            }
+
+            devTbody.innerHTML = currentDevicesData.map(d => {
+                let statusBadge = '';
+                if (d.is_screen_on) {
+                    const elapsedSecs = d.current_session_started_at ? (Date.now() - new Date(d.current_session_started_at).getTime()) / 1000 : 0;
+                    statusBadge = `
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 active-glow">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 live-dot"></span>
+                            <span class="font-bold text-xs uppercase tracking-wide">PANTALLA ACTIVA:</span>
+                            <span class="font-mono font-bold text-xs text-white" id="live-timer-${d.id}">${formatDurationSeconds(elapsedSecs)}</span>
+                        </div>
+                    `;
+                } else {
+                    statusBadge = `
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-xs border border-slate-700">
+                            <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+                            En reposo (pantalla apagada)
+                        </span>
+                    `;
+                }
+
+                return `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-3 px-3 font-medium text-white flex items-center gap-2">
+                            <i class="fa-solid fa-mobile text-slate-400"></i>
+                            <div>
+                                <div class="font-semibold">${d.model_name}</div>
+                                <div class="text-[11px] font-mono text-slate-500">${d.id}</div>
+                            </div>
+                        </td>
+                        <td class="py-3 px-3">${statusBadge}</td>
+                        <td class="py-3 px-3 font-semibold text-emerald-400">${d.total_screen_time_formatted}</td>
+                        <td class="py-3 px-3 text-slate-300">${d.total_unlocks} veces</td>
+                        <td class="py-3 px-3 text-xs text-slate-400">${formatLocalDate(d.last_seen)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Ticker que corre cada 1 segundo para incrementar los segundos en vivo
+        setInterval(() => {
+            let needsRerender = false;
+            for (const d of currentDevicesData) {
+                if (d.is_screen_on && d.current_session_started_at) {
+                    const elapsed = (Date.now() - new Date(d.current_session_started_at).getTime()) / 1000;
+                    const timerEl = document.getElementById(`live-timer-${d.id}`);
+                    if (timerEl) {
+                        timerEl.innerText = formatDurationSeconds(elapsed);
+                    } else {
+                        needsRerender = true;
+                    }
+                }
+            }
+            if (needsRerender) {
+                renderDevicesTable();
+            }
+        }, 1000);
+
+        // Conexión WebSocket para notificaciones al instante
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
@@ -238,8 +304,13 @@
             ws.onmessage = (event) => {
                 try {
                     const message = JSON.parse(event.data);
-                    if (message.type === 'NEW_SESSION') {
-                        showToast(`📱 ${message.model_name || message.device_id}: pantalla usada durante ${message.duration_formatted}`);
+                    if (message.type === 'SCREEN_STATE_CHANGE') {
+                        if (message.is_screen_on) {
+                            showToast("🟢 PANTALLA ENCENDIDA", `${message.model_name || message.device_id} encendió la pantalla. Iniciando contador...`, true);
+                        }
+                        fetchLatestData();
+                    } else if (message.type === 'NEW_SESSION') {
+                        showToast("📱 PANTALLA APAGADA", `${message.model_name || message.device_id}: sesión finalizada (${message.duration_formatted})`, false);
                         fetchLatestData();
                     }
                 } catch (e) {
@@ -248,7 +319,6 @@
             };
 
             ws.onclose = () => {
-                console.log('WebSocket cerrado. Reconectando en 3s...');
                 setTimeout(connectWebSocket, 3000);
             };
 
@@ -257,10 +327,10 @@
             };
         }
 
+        // Inicializar
         connectWebSocket();
-
-        // Polling en segundo plano cada 3 segundos (nunca recarga la pantalla entera)
-        setInterval(fetchLatestData, 3000);
+        fetchLatestData();
+        setInterval(fetchLatestData, 4000);
     </script>
 </body>
 </html>

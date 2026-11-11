@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 import qrcode
 
 from database import engine, Base, get_db
@@ -18,6 +18,19 @@ import schemas
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Migración segura para nuevas columnas en bases de datos SQLite existentes
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE devices ADD COLUMN is_screen_on BOOLEAN DEFAULT 0"))
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE devices ADD COLUMN current_session_started_at DATETIME"))
+        conn.commit()
+    except Exception:
+        pass
 
 app = FastAPI(
     title="ScreenTime Tracker API",
@@ -152,6 +165,48 @@ async def get_download_qr(request: Request):
     buf.seek(0)
     return Response(content=buf.getvalue(), media_type="image/png")
 
+@app.post("/api/v1/screen-status", status_code=status.HTTP_200_OK)
+async def update_screen_status(
+    status_update: schemas.ScreenStatusUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """
+    Notifica al instante cuando la pantalla se enciende o se apaga.
+    Permite el contador de segundos en vivo en el Dashboard.
+    """
+    device = db.query(models.Device).filter(models.Device.id == status_update.device_id).first()
+    if not device:
+        device = models.Device(
+            id=status_update.device_id,
+            model_name=status_update.model_name or "Android Device",
+            is_screen_on=status_update.is_screen_on,
+            current_session_started_at=status_update.timestamp if status_update.is_screen_on else None,
+            last_seen=datetime.utcnow()
+        )
+        db.add(device)
+    else:
+        device.is_screen_on = status_update.is_screen_on
+        device.current_session_started_at = status_update.timestamp if status_update.is_screen_on else None
+        device.last_seen = datetime.utcnow()
+        if status_update.model_name:
+            device.model_name = status_update.model_name
+
+    db.commit()
+    db.refresh(device)
+
+    # Broadcast en tiempo real por WebSocket
+    await manager.broadcast({
+        "type": "SCREEN_STATE_CHANGE",
+        "device_id": device.id,
+        "model_name": device.model_name,
+        "is_screen_on": device.is_screen_on,
+        "started_at": device.current_session_started_at.isoformat() + "Z" if device.current_session_started_at else None,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    })
+
+    return {"status": "ok", "is_screen_on": device.is_screen_on}
+
 @app.post("/api/v1/screen-events", status_code=status.HTTP_201_CREATED)
 async def register_screen_event(
     event: schemas.ScreenEventCreate,
@@ -168,10 +223,14 @@ async def register_screen_event(
         device = models.Device(
             id=event.device_id,
             model_name=event.model_name or "Android Device",
+            is_screen_on=False,
+            current_session_started_at=None,
             last_seen=datetime.utcnow()
         )
         db.add(device)
     else:
+        device.is_screen_on = False
+        device.current_session_started_at = None
         device.last_seen = datetime.utcnow()
         if event.model_name:
             device.model_name = event.model_name
@@ -187,15 +246,16 @@ async def register_screen_event(
     db.commit()
     db.refresh(log)
 
-    # Notificar a los navegadores conectados en tiempo real
+    # Notificar a los navegadores conectados en tiempo real con fecha ISO UTC
     await manager.broadcast({
         "type": "NEW_SESSION",
         "device_id": log.device_id,
         "model_name": device.model_name,
-        "screen_on_at": log.screen_on_at.strftime("%Y-%m-%d %H:%M:%S"),
-        "screen_off_at": log.screen_off_at.strftime("%Y-%m-%d %H:%M:%S"),
+        "screen_on_at": log.screen_on_at.isoformat() + "Z",
+        "screen_off_at": log.screen_off_at.isoformat() + "Z",
         "duration_seconds": log.duration_seconds,
-        "duration_formatted": format_duration(log.duration_seconds)
+        "duration_formatted": format_duration(log.duration_seconds),
+        "is_screen_on": False
     })
 
     return {
@@ -211,7 +271,6 @@ async def websocket_dashboard_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Mantener conexión viva
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
@@ -220,7 +279,7 @@ async def websocket_dashboard_endpoint(websocket: WebSocket):
 
 @app.get("/api/v1/dashboard-data")
 async def get_dashboard_data(db: Session = Depends(get_db)):
-    """Devuelve los datos del dashboard en JSON para actualización fluida."""
+    """Devuelve los datos del dashboard en JSON para actualización fluida con zonas horarias locales."""
     devices = db.query(models.Device).order_by(models.Device.last_seen.desc()).all()
     
     device_summaries = []
@@ -237,19 +296,21 @@ async def get_dashboard_data(db: Session = Depends(get_db)):
         device_summaries.append({
             "id": d.id,
             "model_name": d.model_name,
+            "is_screen_on": bool(d.is_screen_on),
+            "current_session_started_at": d.current_session_started_at.isoformat() + "Z" if d.current_session_started_at else None,
             "total_screen_time_seconds": total_time,
             "total_screen_time_formatted": format_duration(total_time),
             "total_unlocks": total_unlocks,
-            "last_seen": d.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+            "last_seen": d.last_seen.isoformat() + "Z"
         })
 
-    recent_logs_query = db.query(models.ScreenLog).order_by(models.ScreenLog.id.desc()).limit(20).all()
+    recent_logs_query = db.query(models.ScreenLog).order_by(models.ScreenLog.id.desc()).limit(25).all()
     recent_logs = [
         {
             "id": l.id,
             "device_id": l.device_id,
-            "screen_on_at": l.screen_on_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "screen_off_at": l.screen_off_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "screen_on_at": l.screen_on_at.isoformat() + "Z",
+            "screen_off_at": l.screen_off_at.isoformat() + "Z",
             "duration_seconds": l.duration_seconds,
             "duration_formatted": format_duration(l.duration_seconds)
         }

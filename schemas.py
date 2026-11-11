@@ -2,6 +2,12 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
 
+class ScreenStatusUpdate(BaseModel):
+    device_id: str = Field(..., min_length=3, max_length=100)
+    model_name: Optional[str] = Field("Android Device", max_length=100)
+    is_screen_on: bool
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
 class ScreenEventCreate(BaseModel):
     device_id: str = Field(..., min_length=3, max_length=100, description="Identificador único del dispositivo")
     model_name: Optional[str] = Field("Android Device", max_length=100)
