@@ -89,8 +89,8 @@ def render_template(template_name: str, request: Request, context: dict = None):
 # Configurable Security API Key & App Version
 API_KEY = os.getenv("API_KEY", "screentime_secure_key_2026")
 APK_PATH = os.path.join("static", "app.apk")
-LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "3"))
-LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.2.0")
+LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "4"))
+LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.3.0")
 
 @app.get("/api/v1/app-version")
 async def get_app_version(request: Request):
@@ -300,13 +300,24 @@ async def websocket_dashboard_endpoint(websocket: WebSocket):
 
 @app.get("/api/v1/dashboard-data")
 async def get_dashboard_data(db: Session = Depends(get_db)):
-    """Devuelve los datos del dashboard en JSON para actualización fluida con zonas horarias locales."""
+    """Devuelve los datos del dashboard en JSON para actualización fluida con auto-recuperación de reposo."""
     devices = db.query(models.Device).order_by(models.Device.last_seen.desc()).all()
     
     device_summaries = []
     grand_total_seconds = 0.0
+    now_utc = datetime.utcnow()
 
     for d in devices:
+        # Auto-recuperación: si pasaron más de 45s sin señales del celular, asegurar que no quede como pantalla activa
+        is_really_on = bool(d.is_screen_on)
+        if is_really_on and d.last_seen:
+            time_diff = (now_utc - d.last_seen).total_seconds()
+            if time_diff > 45:
+                d.is_screen_on = False
+                d.current_session_started_at = None
+                is_really_on = False
+                db.commit()
+
         total_time = db.query(func.coalesce(func.sum(models.ScreenLog.duration_seconds), 0.0))\
                        .filter(models.ScreenLog.device_id == d.id).scalar()
         total_unlocks = db.query(func.count(models.ScreenLog.id))\
@@ -317,8 +328,8 @@ async def get_dashboard_data(db: Session = Depends(get_db)):
         device_summaries.append({
             "id": d.id,
             "model_name": d.model_name,
-            "is_screen_on": bool(d.is_screen_on),
-            "current_session_started_at": d.current_session_started_at.isoformat() + "Z" if d.current_session_started_at else None,
+            "is_screen_on": is_really_on,
+            "current_session_started_at": d.current_session_started_at.isoformat() + "Z" if d.current_session_started_at and is_really_on else None,
             "total_screen_time_seconds": total_time,
             "total_screen_time_formatted": format_duration(total_time),
             "total_unlocks": total_unlocks,
