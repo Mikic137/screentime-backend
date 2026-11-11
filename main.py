@@ -89,8 +89,8 @@ def render_template(template_name: str, request: Request, context: dict = None):
 # Configurable Security API Key & App Version
 API_KEY = os.getenv("API_KEY", "screentime_secure_key_2026")
 APK_PATH = os.path.join("static", "app.apk")
-LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "5"))
-LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.3.1")
+LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "6"))
+LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.3.2")
 
 @app.get("/api/v1/app-version")
 async def get_app_version(request: Request):
@@ -108,7 +108,7 @@ async def get_app_version(request: Request):
         "version_code": LATEST_VERSION_CODE,
         "version_name": LATEST_VERSION_NAME,
         "download_url": download_url,
-        "release_notes": "Mejora crítica para Infinix/Xiaomi: persistencia en segundo plano (stopWithTask=false), botón directo para deshabilitar optimización de batería y auto-inicio de servicio."
+        "release_notes": "Eliminación de retrasos al apagar la pantalla: sincronización atómica inmediata, prevención de colisiones de latido y respuesta instantánea."
     }
 
 def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
@@ -207,8 +207,15 @@ async def update_screen_status(
         )
         db.add(device)
     else:
-        device.is_screen_on = status_update.is_screen_on
-        device.current_session_started_at = status_update.timestamp if status_update.is_screen_on else None
+        # Prioridad absoluta al apagado: si es false, apaga inmediatamente
+        if not status_update.is_screen_on:
+            device.is_screen_on = False
+            device.current_session_started_at = None
+        else:
+            device.is_screen_on = True
+            if not device.current_session_started_at:
+                device.current_session_started_at = status_update.timestamp
+
         device.last_seen = datetime.utcnow()
         if status_update.model_name:
             device.model_name = status_update.model_name
@@ -308,11 +315,11 @@ async def get_dashboard_data(db: Session = Depends(get_db)):
     now_utc = datetime.utcnow()
 
     for d in devices:
-        # Auto-recuperación: si pasaron más de 45s sin señales del celular, asegurar que no quede como pantalla activa
+        # Auto-recuperación: si pasaron más de 25s sin señales del celular, asegurar que no quede como pantalla activa
         is_really_on = bool(d.is_screen_on)
         if is_really_on and d.last_seen:
             time_diff = (now_utc - d.last_seen).total_seconds()
-            if time_diff > 45:
+            if time_diff > 25:
                 d.is_screen_on = False
                 d.current_session_started_at = None
                 is_really_on = False
