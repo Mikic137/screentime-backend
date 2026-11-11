@@ -89,8 +89,8 @@ def render_template(template_name: str, request: Request, context: dict = None):
 # Configurable Security API Key & App Version
 API_KEY = os.getenv("API_KEY", "screentime_secure_key_2026")
 APK_PATH = os.path.join("static", "app.apk")
-LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "2"))
-LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.1.0")
+LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "3"))
+LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.2.0")
 
 @app.get("/api/v1/app-version")
 async def get_app_version(request: Request):
