@@ -86,9 +86,30 @@ def render_template(template_name: str, request: Request, context: dict = None):
         # Compatible con Starlette antigua
         return templates.TemplateResponse(template_name, ctx)
 
-# Configurable Security API Key
+# Configurable Security API Key & App Version
 API_KEY = os.getenv("API_KEY", "screentime_secure_key_2026")
 APK_PATH = os.path.join("static", "app.apk")
+LATEST_VERSION_CODE = int(os.getenv("LATEST_VERSION_CODE", "2"))
+LATEST_VERSION_NAME = os.getenv("LATEST_VERSION_NAME", "1.1.0")
+
+@app.get("/api/v1/app-version")
+async def get_app_version(request: Request):
+    """Devuelve la versión más reciente del APK disponible para descargar y actualizar."""
+    public_url = os.getenv("PUBLIC_URL")
+    if public_url:
+        download_url = f"{public_url.rstrip('/')}/descargar"
+    else:
+        base_url = str(request.base_url).rstrip('/')
+        if request.headers.get("x-forwarded-proto") == "https":
+            base_url = base_url.replace("http://", "https://")
+        download_url = f"{base_url}/descargar"
+
+    return {
+        "version_code": LATEST_VERSION_CODE,
+        "version_name": LATEST_VERSION_NAME,
+        "download_url": download_url,
+        "release_notes": "Sincronización en tiempo real, corrección de zona horaria local, contador en vivo y soporte para Infinix/Xiaomi."
+    }
 
 def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
     """Valida la clave secreta para endpoints que reciben datos de la app Android."""
@@ -115,7 +136,7 @@ def format_duration(seconds: float) -> str:
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Página de inicio con QR para descargar la APK."""
-    return render_template("index.html", request)
+    return render_template("index.html", request, {"version_name": LATEST_VERSION_NAME})
 
 @app.get("/descargar")
 async def download_apk():

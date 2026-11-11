@@ -13,8 +13,19 @@
             <i class="fa-solid fa-mobile-screen text-2xl text-white"></i>
         </div>
         
-        <h1 class="text-2xl font-bold text-white mb-2">ScreenTime Tracker</h1>
-        <p class="text-slate-400 text-sm mb-6">Escanea el código QR desde tu celular Android para descargar e instalar la aplicación directamente.</p>
+        <h1 class="text-2xl font-bold text-white mb-1">ScreenTime Tracker</h1>
+        
+        <!-- Version Badge -->
+        <div class="flex items-center justify-center gap-2 mb-4">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <i class="fa-solid fa-code-branch text-[11px]"></i> Versión {{ version_name }}
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <i class="fa-solid fa-circle-check text-[11px]"></i> APK Oficial
+            </span>
+        </div>
+
+        <p class="text-slate-400 text-xs mb-6">Escanea el código QR desde tu celular Android para descargar e instalar la aplicación directamente.</p>
 
         <!-- QR Code Container -->
         <div class="bg-white p-4 rounded-2xl inline-block shadow-inner mb-6">
